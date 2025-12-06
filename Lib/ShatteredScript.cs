@@ -14,9 +14,10 @@ public class ShatteredScript : MonoBehaviour {
 
     VoronoiDiagram voronoi;
     PointD[] shardLabelPositions;
-    (MeshRenderer mr, MeshFilter mf, MeshFilter highlightMf, KMSelectable sel)[] shards;
+    (CollisionDetect cd, KMSelectable sel)[] shards;
     int heldShard = -1;
     const int totalShards = 10;
+    bool[] hasBeenPlaced;
 
     static int moduleIdCounter = 1;
     int moduleId;
@@ -31,7 +32,7 @@ public class ShatteredScript : MonoBehaviour {
     void Start()
     {
         // Generate randomized shattered mirror
-        // Achieved with Voronoi diagram code from Voronoi Maze by Timwi
+        // Achieved with modified Voronoi diagram code from Voronoi Maze by Timwi
         var rnd = new System.Random(UnityEngine.Random.Range(0, int.MaxValue));
 
         tryEverythingAgain:
@@ -55,7 +56,7 @@ public class ShatteredScript : MonoBehaviour {
         var points = pointsList.ToArray();
         var numShards = points.Length;
 
-        shards = new (MeshRenderer mr, MeshFilter mf, MeshFilter highlightMf, KMSelectable sel)[numShards];
+        shards = new (CollisionDetect cd, KMSelectable sel)[numShards];
         var children = new List<KMSelectable>();
         for (var shardIx = 0; shardIx < points.Length; shardIx++)
         {
@@ -104,6 +105,7 @@ public class ShatteredScript : MonoBehaviour {
             colliderMesh.triangles = Enumerable.Range(0, colliderMeshTris.Count).ToArray();
             colliderMesh.normals = Enumerable.Repeat(new Vector3(0, 1, 0), colliderMeshTris.Count).ToArray();
             selectable.gameObject.GetComponent<MeshCollider>().sharedMesh = colliderMesh;
+            selectable.transform.GetChild(1).GetComponent<MeshCollider>().sharedMesh = colliderMesh;
 
             var shardMesh = new Mesh();
             shardMesh.vertices = shardMeshTris.Select(pIx => convertPointToVector(polygon.Vertices[pIx], 0)).ToArray();
@@ -114,7 +116,10 @@ public class ShatteredScript : MonoBehaviour {
             shardMesh.uv = shardMeshTris.Select(ix => uvVector(edgeLengths.Take(ix).Sum() / totalLength)).ToArray();
             meshFilter.sharedMesh = shardMesh;
 
-            shards[shardIx] = (selectable.GetComponent<MeshRenderer>(), selectable.GetComponent<MeshFilter>(), selectable.Highlight.GetComponent<MeshFilter>(), selectable);
+            // Shrink shards a little so they fit better
+            selectable.transform.localScale = new Vector3(0.98f, 1, 0.98f);
+
+            shards[shardIx] = (selectable.GetComponentInChildren<CollisionDetect>(), selectable);
             int sIx = shardIx;
             selectable.OnInteract = delegate () { ShardPressed(sIx); return false; };
             selectable.OnInteractEnded = delegate () { ShardReleased(sIx); };
@@ -124,6 +129,10 @@ public class ShatteredScript : MonoBehaviour {
 
         modSel.Children = children.ToArray();
         modSel.UpdateChildren();
+
+        hasBeenPlaced = new bool[shards.Length];
+        for (int i = 1; i < shards.Length; i++)
+            shards[i].sel.gameObject.SetActive(false);
     }
 
     const double cf = .0835 / .5;
@@ -138,19 +147,47 @@ public class ShatteredScript : MonoBehaviour {
     {
         if (heldShard != -1)
         {
-            shards[heldShard].sel.transform.position = Camera.main.ScreenToViewportPoint(new Vector3(Input.mousePosition.x, 0.01f, -Input.mousePosition.z));
+            float distanceToScreen = Camera.main.WorldToScreenPoint(shards[heldShard].sel.transform.position).z;
+            Vector3 posMove = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, distanceToScreen));
+            shards[heldShard].sel.transform.position = new Vector3(posMove.x, shards[heldShard].sel.transform.position.y, posMove.z);
         }
     }
 
     void ShardPressed(int shardIndex)
     {
-        audio.PlaySoundAtTransform("shardUp", shards[shardIndex].sel.transform);
-        heldShard = shardIndex;
+        if (hasBeenPlaced.All(x => x))
+        {
+            audio.PlaySoundAtTransform("shardUp", shards[shardIndex].sel.transform);
+            heldShard = shardIndex;
+        }
+        else
+        {
+            audio.PlaySoundAtTransform("shardDown", shards[shardIndex].sel.transform);
+            hasBeenPlaced[shardIndex] = true;
+            for (int i = 0; i < hasBeenPlaced.Length; i++)
+            {
+                if (!hasBeenPlaced[i])
+                {
+                    heldShard = i;
+                    shards[i].sel.gameObject.SetActive(true);
+                    break;
+                }
+            }
+            if (hasBeenPlaced.All(x => x))
+                heldShard = -1;
+        }
     }
 
     void ShardReleased(int shardIndex)
     {
-        audio.PlaySoundAtTransform("shardDown", shards[shardIndex].sel.transform);
-        heldShard = -1;
+        if (hasBeenPlaced.All(x => x) && heldShard != -1)
+        {
+            audio.PlaySoundAtTransform("shardDown", shards[shardIndex].sel.transform);
+            heldShard = -1;
+            for (int i = 0; i < shards.Length; i++)
+                if (shards[i].cd.isColliding)
+                    return;
+            GetComponent<KMBombModule>().HandlePass();
+        }
     }
 }

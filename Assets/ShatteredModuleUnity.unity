@@ -152,14 +152,13 @@ Prefab:
       propertyPath: m_RootOrder
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 101964, guid: 8814ea52310d2614a9feda02ec355ae4, type: 2}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 8814ea52310d2614a9feda02ec355ae4, type: 2}
   m_IsPrefabParent: 0
---- !u!64 &329938686 stripped
-MeshCollider:
-  m_PrefabParentObject: {fileID: 64402605014337414, guid: d77aeecc9033c424b84b329d92de0aa7,
-    type: 2}
-  m_PrefabInternal: {fileID: 1462199522}
 --- !u!1 &1081261601
 GameObject:
   m_ObjectHideFlags: 0
@@ -306,18 +305,13 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &1462199522
+--- !u!1001 &1447063470
 Prefab:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 114284416558028666, guid: d77aeecc9033c424b84b329d92de0aa7,
-        type: 2}
-      propertyPath: SelectableColliders.Array.size
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 4041300201032840, guid: d77aeecc9033c424b84b329d92de0aa7, type: 2}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -348,27 +342,6 @@ Prefab:
       objectReference: {fileID: 0}
     - target: {fileID: 4041300201032840, guid: d77aeecc9033c424b84b329d92de0aa7, type: 2}
       propertyPath: m_RootOrder
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4812523463500436, guid: d77aeecc9033c424b84b329d92de0aa7, type: 2}
-      propertyPath: m_LocalScale.x
-      value: 0.0001
-      objectReference: {fileID: 0}
-    - target: {fileID: 4812523463500436, guid: d77aeecc9033c424b84b329d92de0aa7, type: 2}
-      propertyPath: m_LocalScale.y
-      value: 0.0001
-      objectReference: {fileID: 0}
-    - target: {fileID: 4812523463500436, guid: d77aeecc9033c424b84b329d92de0aa7, type: 2}
-      propertyPath: m_LocalScale.z
-      value: 0.0001
-      objectReference: {fileID: 0}
-    - target: {fileID: 114284416558028666, guid: d77aeecc9033c424b84b329d92de0aa7,
-        type: 2}
-      propertyPath: SelectableColliders.Array.data[0]
-      value: 
-      objectReference: {fileID: 329938686}
-    - target: {fileID: 4913683417358780, guid: d77aeecc9033c424b84b329d92de0aa7, type: 2}
-      propertyPath: m_LocalPosition.z
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
