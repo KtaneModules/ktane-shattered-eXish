@@ -5,19 +5,27 @@ using System;
 using RT.Util.Geometry;
 using RT.KitchenSink.Geometry;
 using RT.Util.ExtensionMethods;
+using System.Collections;
 
 public class ShatteredScript : MonoBehaviour {
 
     public KMAudio audio;
     public KMSelectable modSel;
-    public KMSelectable shardTemplate;
+    public GameObject shardTemplate;
+    public GameObject statusLight;
+    public GameObject fullMirror;
+    public Light solveLight;
+    public Material[] debugMats;
 
     VoronoiDiagram voronoi;
     PointD[] shardLabelPositions;
-    (CollisionDetect cd, KMSelectable sel)[] shards;
-    int heldShard = -1;
+    (CollisionDetect cd, KMSelectable sel, MeshRenderer rend)[] shards;
+    int heldShard;
     const int totalShards = 10;
     bool[] hasBeenPlaced;
+    bool focused;
+
+    bool debugMode = true; // Debug shard status (green = in frame and not colliding, red = outside frame or colliding)
 
     static int moduleIdCounter = 1;
     int moduleId;
@@ -56,12 +64,13 @@ public class ShatteredScript : MonoBehaviour {
         var points = pointsList.ToArray();
         var numShards = points.Length;
 
-        shards = new (CollisionDetect cd, KMSelectable sel)[numShards];
+        shards = new (CollisionDetect cd, KMSelectable sel, MeshRenderer rend)[numShards];
         var children = new List<KMSelectable>();
         for (var shardIx = 0; shardIx < points.Length; shardIx++)
         {
             var polygon = voronoi.Polygons[shardIx];
-            var selectable = Instantiate(shardTemplate, transform);
+            var obj = Instantiate(shardTemplate, transform);
+            var selectable = obj.GetComponentInChildren<KMSelectable>();
             children.Add(selectable);
             var meshFilter = selectable.GetComponent<MeshFilter>();
 
@@ -119,7 +128,13 @@ public class ShatteredScript : MonoBehaviour {
             // Shrink shards a little so they fit better
             selectable.transform.localScale = new Vector3(0.98f, 1, 0.98f);
 
-            shards[shardIx] = (selectable.GetComponentInChildren<CollisionDetect>(), selectable);
+            // Fix shard mesh center point being off center
+            selectable.transform.localPosition = convertPointToVector(polygon.Centroid(), 0) * -1;
+
+            // Rotate shard by random 90 degree angle
+            selectable.transform.parent.transform.localEulerAngles += new Vector3(0, 90 * UnityEngine.Random.Range(0, 4), 0);
+
+            shards[shardIx] = (selectable.GetComponentInChildren<CollisionDetect>(), selectable, selectable.GetComponent<MeshRenderer>());
             int sIx = shardIx;
             selectable.OnInteract = delegate () { ShardPressed(sIx); return false; };
             selectable.OnInteractEnded = delegate () { ShardReleased(sIx); };
@@ -133,6 +148,13 @@ public class ShatteredScript : MonoBehaviour {
         hasBeenPlaced = new bool[shards.Length];
         for (int i = 1; i < shards.Length; i++)
             shards[i].sel.gameObject.SetActive(false);
+
+        modSel.OnFocus += delegate () { focused = true; };
+        modSel.OnDefocus += delegate () { focused = false; };
+
+        solveLight.range *= transform.lossyScale.x;
+
+        statusLight.SetActive(false);
     }
 
     const double cf = .0835 / .5;
@@ -147,14 +169,29 @@ public class ShatteredScript : MonoBehaviour {
     {
         if (heldShard != -1)
         {
-            float distanceToScreen = Camera.main.WorldToScreenPoint(shards[heldShard].sel.transform.position).z;
+            shards[heldShard].sel.gameObject.SetActive(focused);
+            float distanceToScreen = Camera.main.WorldToScreenPoint(shards[heldShard].sel.transform.parent.transform.position).z;
             Vector3 posMove = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, distanceToScreen));
-            shards[heldShard].sel.transform.position = new Vector3(posMove.x, shards[heldShard].sel.transform.position.y, posMove.z);
+            shards[heldShard].sel.transform.parent.transform.position = new Vector3(posMove.x, shards[heldShard].sel.transform.parent.transform.position.y, posMove.z);
+            shards[heldShard].sel.transform.parent.transform.localPosition = new Vector3(shards[heldShard].sel.transform.parent.transform.localPosition.x, 0.03f, shards[heldShard].sel.transform.parent.transform.localPosition.z);
+            if (Input.GetKeyDown(KeyCode.R))
+                shards[heldShard].sel.transform.parent.transform.localEulerAngles += new Vector3(0, 90, 0);
+        }
+        if (debugMode)
+        {
+            for (int i = 0; i < shards.Length; i++)
+            {
+                if (!shards[i].cd.isColliding && !ShardOutsideBounds(shards[i].sel.transform.parent.transform))
+                    shards[i].rend.material = debugMats[0];
+                else
+                    shards[i].rend.material = debugMats[1];
+            }
         }
     }
 
     void ShardPressed(int shardIndex)
     {
+        if (moduleSolved) return;
         if (hasBeenPlaced.All(x => x))
         {
             audio.PlaySoundAtTransform("shardUp", shards[shardIndex].sel.transform);
@@ -163,6 +200,8 @@ public class ShatteredScript : MonoBehaviour {
         else
         {
             audio.PlaySoundAtTransform("shardDown", shards[shardIndex].sel.transform);
+            if (!ShardOutsideBounds(shards[shardIndex].sel.transform.parent.transform))
+                shards[shardIndex].sel.transform.parent.transform.localPosition = new Vector3(shards[shardIndex].sel.transform.parent.transform.localPosition.x, 0.0101f, shards[shardIndex].sel.transform.parent.transform.localPosition.z);
             hasBeenPlaced[shardIndex] = true;
             for (int i = 0; i < hasBeenPlaced.Length; i++)
             {
@@ -180,14 +219,49 @@ public class ShatteredScript : MonoBehaviour {
 
     void ShardReleased(int shardIndex)
     {
+        if (moduleSolved) return;
         if (hasBeenPlaced.All(x => x) && heldShard != -1)
         {
             audio.PlaySoundAtTransform("shardDown", shards[shardIndex].sel.transform);
             heldShard = -1;
+            if (!ShardOutsideBounds(shards[shardIndex].sel.transform.parent.transform))
+                shards[shardIndex].sel.transform.parent.transform.localPosition = new Vector3(shards[shardIndex].sel.transform.parent.transform.localPosition.x, 0.0101f, shards[shardIndex].sel.transform.parent.transform.localPosition.z);
             for (int i = 0; i < shards.Length; i++)
-                if (shards[i].cd.isColliding)
+                if (shards[i].cd.isColliding || ShardOutsideBounds(shards[i].sel.transform.parent.transform))
                     return;
-            GetComponent<KMBombModule>().HandlePass();
+            moduleSolved = true;
+            audio.PlaySoundAtTransform("solveMirror", transform);
+            StartCoroutine(SolveAnimation());
         }
+    }
+
+    bool ShardOutsideBounds(Transform trans)
+    {
+        if (trans.localPosition.x < -.1f || trans.localPosition.x > .1f || trans.localPosition.z < -.1f || trans.localPosition.z > .1f)
+            return true;
+        else
+            return false;
+    }
+
+    IEnumerator SolveAnimation()
+    {
+        float t = 0;
+        while (t < 5f)
+        {
+            t += Time.deltaTime;
+            solveLight.intensity = t;
+            yield return null;
+        }
+        for (int i = 1; i < shards.Length; i++)
+            shards[i].sel.gameObject.SetActive(false);
+        fullMirror.SetActive(true);
+        t = 0;
+        while (t < 5f)
+        {
+            t += Time.deltaTime * 3f;
+            solveLight.intensity = 5 - t;
+            yield return null;
+        }
+        GetComponent<KMBombModule>().HandlePass();
     }
 }
