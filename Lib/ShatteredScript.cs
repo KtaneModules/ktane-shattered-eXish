@@ -14,6 +14,7 @@ public class ShatteredScript : MonoBehaviour {
     public GameObject shardTemplate;
     public GameObject statusLight;
     public GameObject fullMirror;
+    public GameObject solveText;
     public Light solveLight;
     public Material[] debugMats;
 
@@ -83,7 +84,7 @@ public class ShatteredScript : MonoBehaviour {
                 var j = (i + 1) % polygon.Vertices.Count;
 
                 const float colliderTop = 0;
-                const float colliderBottom = -.01f;
+                const float colliderBottom = -.03f;
                 colliderMeshTris.Add(convertPointToVector(polygon.Vertices[i], colliderBottom));
                 colliderMeshTris.Add(convertPointToVector(polygon.Vertices[i], colliderTop));
                 colliderMeshTris.Add(convertPointToVector(polygon.Vertices[j], colliderTop));
@@ -146,11 +147,12 @@ public class ShatteredScript : MonoBehaviour {
         modSel.UpdateChildren();
 
         hasBeenPlaced = new bool[shards.Length];
-        for (int i = 1; i < shards.Length; i++)
+        for (int i = 0; i < shards.Length; i++)
             shards[i].sel.gameObject.SetActive(false);
 
         modSel.OnFocus += delegate () { focused = true; };
         modSel.OnDefocus += delegate () { focused = false; };
+        if (Application.isEditor) focused = true;
 
         solveLight.range *= transform.lossyScale.x;
 
@@ -170,12 +172,15 @@ public class ShatteredScript : MonoBehaviour {
         if (heldShard != -1)
         {
             shards[heldShard].sel.gameObject.SetActive(focused);
-            float distanceToScreen = Camera.main.WorldToScreenPoint(shards[heldShard].sel.transform.parent.transform.position).z;
-            Vector3 posMove = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, distanceToScreen));
-            shards[heldShard].sel.transform.parent.transform.position = new Vector3(posMove.x, shards[heldShard].sel.transform.parent.transform.position.y, posMove.z);
-            shards[heldShard].sel.transform.parent.transform.localPosition = new Vector3(shards[heldShard].sel.transform.parent.transform.localPosition.x, 0.03f, shards[heldShard].sel.transform.parent.transform.localPosition.z);
-            if (Input.GetKeyDown(KeyCode.R))
-                shards[heldShard].sel.transform.parent.transform.localEulerAngles += new Vector3(0, 90, 0);
+            if (shards[heldShard].sel.gameObject.activeSelf)
+            {
+                float distanceToScreen = Camera.main.WorldToScreenPoint(shards[heldShard].sel.transform.parent.transform.position).z;
+                Vector3 posMove = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, distanceToScreen));
+                shards[heldShard].sel.transform.parent.transform.position = new Vector3(posMove.x, shards[heldShard].sel.transform.parent.transform.position.y, posMove.z);
+                shards[heldShard].sel.transform.parent.transform.localPosition = new Vector3(shards[heldShard].sel.transform.parent.transform.localPosition.x, 0.03f, shards[heldShard].sel.transform.parent.transform.localPosition.z);
+                if (Input.GetKeyDown(KeyCode.R))
+                    shards[heldShard].sel.transform.parent.transform.localEulerAngles += new Vector3(0, 90, 0);
+            }
         }
         if (debugMode)
         {
@@ -230,6 +235,7 @@ public class ShatteredScript : MonoBehaviour {
                 if (shards[i].cd.isColliding || ShardOutsideBounds(shards[i].sel.transform.parent.transform))
                     return;
             moduleSolved = true;
+            Debug.LogFormat("[Shattered #{0}] Module solved", moduleId);
             audio.PlaySoundAtTransform("solveMirror", transform);
             StartCoroutine(SolveAnimation());
         }
@@ -249,17 +255,18 @@ public class ShatteredScript : MonoBehaviour {
         while (t < 5f)
         {
             t += Time.deltaTime;
-            solveLight.intensity = t;
+            solveLight.intensity = t * 2;
             yield return null;
         }
         for (int i = 1; i < shards.Length; i++)
             shards[i].sel.gameObject.SetActive(false);
         fullMirror.SetActive(true);
+        solveText.SetActive(true);
         t = 0;
         while (t < 5f)
         {
             t += Time.deltaTime * 3f;
-            solveLight.intensity = 5 - t;
+            solveLight.intensity = 10 - (t * 2);
             yield return null;
         }
         GetComponent<KMBombModule>().HandlePass();
