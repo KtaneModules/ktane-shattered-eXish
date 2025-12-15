@@ -6,10 +6,15 @@ using RT.Util.Geometry;
 using RT.KitchenSink.Geometry;
 using RT.Util.ExtensionMethods;
 using System.Collections;
+using System.Text;
+using Newtonsoft.Json.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
 
 public class ShatteredScript : MonoBehaviour {
 
     public KMAudio audio;
+    public KMBombInfo info;
     public KMSelectable modSel;
     public GameObject shardTemplate;
     public GameObject statusLight;
@@ -21,15 +26,17 @@ public class ShatteredScript : MonoBehaviour {
     public Material mirrorMatTemplate;
     public RenderTexture mirrorTexTemplate;
 
-    VoronoiDiagram voronoi;
+    VoronoiDiagram mirror;
     PointD[] shardLabelPositions;
     (CollisionDetect cd, KMSelectable sel, MeshRenderer rend)[] shards;
     int heldShard;
-    const int totalShards = 10;
+    int totalShards;
     bool[] hasBeenPlaced;
     bool focused;
 
     bool debugMode = false; // Debug shard status (green = in frame and not colliding, red = outside frame or colliding)
+
+    ShatteredSettings Settings = new ShatteredSettings();
 
     static int moduleIdCounter = 1;
     int moduleId;
@@ -47,6 +54,31 @@ public class ShatteredScript : MonoBehaviour {
         // Achieved with modified Voronoi diagram code from Voronoi Maze by Timwi
         var rnd = new System.Random(UnityEngine.Random.Range(0, int.MaxValue));
 
+        ModConfig<ShatteredSettings> modConfig = new ModConfig<ShatteredSettings>("ShatteredSettings");
+        // Read from the settings file, or create one if one doesn't exist
+        Settings = modConfig.Settings;
+        // Update the settings file incase there was an error during read
+        modConfig.Settings = Settings;
+
+        // Update settings if a mission says to
+        string missionDesc = KTMissionGetter.Mission.Description;
+        if (missionDesc != null)
+        {
+            Regex regex = new Regex(@"\[Shattered\] \d+");
+            var match = regex.Match(missionDesc);
+            if (match.Success)
+            {
+                string shardCtStr = match.Value.Replace("[Shattered] ", "");
+                Settings.shardsToGenerate = int.Parse(shardCtStr);
+            }
+        }
+
+        // Update the shard count based on settings
+        if (Settings.shardsToGenerate > 25 || Settings.shardsToGenerate < 2)
+            totalShards = 10;
+        else
+            totalShards = Settings.shardsToGenerate;
+
         tryEverythingAgain:
         var pointsList = new List<PointD>();
         while (pointsList.Count < totalShards)
@@ -56,13 +88,13 @@ public class ShatteredScript : MonoBehaviour {
                 continue;
             pointsList.Add(newPoint);
         }
-        voronoi = VoronoiDiagram.GenerateVoronoiDiagram(pointsList.ToArray(), 1, 1, VoronoiDiagramFlags.IncludeEdgePolygons);
-        shardLabelPositions = voronoi.Polygons.Select(p => p.GetLabelPoint(.005)).ToArray();
+        mirror = VoronoiDiagram.GenerateVoronoiDiagram(pointsList.ToArray(), 1, 1, VoronoiDiagramFlags.IncludeEdgePolygons);
+        shardLabelPositions = mirror.Polygons.Select(p => p.GetLabelPoint(.005)).ToArray();
 
-        // Discard unwanted Voronoi diagrams
-        if (voronoi.Polygons.Any(poly => poly.Vertices.ConsecutivePairs(true).Any(pair => pair.Item1.Distance(pair.Item2) < .05)) ||
-            voronoi.Edges.Any(e => Math.Min(e.edge.Start.Distance(), e.edge.End.Distance()) < .05) ||
-            voronoi.Edges.Any(e => e.edge.Distance(shardLabelPositions[e.siteA]) < .025 || e.edge.Distance(shardLabelPositions[e.siteB]) < .025))
+        // Discard any mirrors with elements that are too small
+        if (mirror.Polygons.Any(poly => poly.Vertices.ConsecutivePairs(true).Any(pair => pair.Item1.Distance(pair.Item2) < .025)) ||
+            mirror.Edges.Any(e => Math.Min(e.edge.Start.Distance(), e.edge.End.Distance()) < .025) ||
+            mirror.Edges.Any(e => e.edge.Distance(shardLabelPositions[e.siteA]) < .0125 || e.edge.Distance(shardLabelPositions[e.siteB]) < .0125))
             goto tryEverythingAgain;
 
         var points = pointsList.ToArray();
@@ -72,7 +104,7 @@ public class ShatteredScript : MonoBehaviour {
         var children = new List<KMSelectable>();
         for (var shardIx = 0; shardIx < points.Length; shardIx++)
         {
-            var polygon = voronoi.Polygons[shardIx];
+            var polygon = mirror.Polygons[shardIx];
             var obj = Instantiate(shardTemplate, transform);
             var selectable = obj.GetComponentInChildren<KMSelectable>();
             children.Add(selectable);
@@ -150,6 +182,28 @@ public class ShatteredScript : MonoBehaviour {
             selectable.OnInteract = delegate () { ShardPressed(sIx); return false; };
             selectable.OnInteractEnded = delegate () { ShardReleased(sIx); };
         }
+
+        // Log the shattered mirror as an SVG
+        var serialNumber = JObject.Parse(info.QueryWidgets(KMBombInfo.QUERYKEY_GET_SERIAL_NUMBER, null).First())["serial"].ToString();
+        var svgEdgeLabels = new StringBuilder();
+        for (var edgeIx = 0; edgeIx < mirror.Edges.Count; edgeIx++)
+        {
+            var (edge, siteA, siteB) = mirror.Edges[edgeIx];
+            var labelPos = (edge.Start + edge.End) / 2;
+            labelPos.Y = 1 - labelPos.Y;
+            svgEdgeLabels.Append($"<path class='edgepath edgepath-{edgeIx}' stroke-width='.0075' stroke='black' fill='none' d='M{edge.Start.X} {1 - edge.Start.Y} {edge.End.X} {1 - edge.End.Y}' />");
+        }
+        var svgShards = new StringBuilder();
+        for (var shardIx = 0; shardIx < shards.Length; shardIx++)
+            svgShards.Append($"<path class='room room-{shardIx}' d='M{mirror.Polygons[shardIx].Vertices.Select(p => $"{p.X} {1 - p.Y}").JoinString(" ")}z' fill='white' stroke='none' />");
+        var svgId = $"{serialNumber}-{moduleId}";
+        Debug.Log($"[Shattered #{moduleId}]=svg[Mirror:]" +
+            $"<svg xmlns='http://www.w3.org/2000/svg' viewBox='-.25 -.01 1.5 1.02' text-anchor='middle' stroke-linecap='round'>" +
+            $"<defs><marker id='marker-{svgId}' viewBox='0 0 10 10' refX='5' refY='5' markerWidth='4' markerHeight='4' orient='auto-start-reverse'><path d='M 0 0 L 10 5 L 0 10 z' /></marker></defs>" +
+            $"<rect x='0' y='0' width='1' height='1' stroke-width='.01' stroke='black' fill='none' />" +
+            $"{svgShards}{svgEdgeLabels}" +
+            $"<path class='arrow' d='' stroke='black' stroke-width='.025' fill='none' marker-end='url(#marker-{svgId})' />" +
+            $"</svg>");
 
         Destroy(shardTemplate.gameObject);
 
@@ -281,4 +335,25 @@ public class ShatteredScript : MonoBehaviour {
         }
         GetComponent<KMBombModule>().HandlePass();
     }
+
+    class ShatteredSettings
+    {
+        public int shardsToGenerate = 10;
+    }
+
+    static Dictionary<string, object>[] TweaksEditorSettings = new Dictionary<string, object>[]
+    {
+        new Dictionary<string, object>
+        {
+            { "Filename", "ShatteredSettings.json" },
+            { "Name", "ShatteredSettings" },
+            { "Listing", new List<Dictionary<string, object>>{
+                new Dictionary<string, object>
+                {
+                    { "Key", "shardsToGenerate" },
+                    { "Text", "The number of shards each module generates. Can be set to a minimum of 2 and a maxmimum of 25." }
+                },
+            } }
+        }
+    };
 }

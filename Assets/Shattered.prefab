@@ -106,7 +106,6 @@ GameObject:
   - component: {fileID: 4325387032164416}
   - component: {fileID: 20370004444758312}
   - component: {fileID: 124634388989993110}
-  - component: {fileID: 81168499781424066}
   m_Layer: 0
   m_Name: mirrorCamera
   m_TagString: Untagged
@@ -916,13 +915,6 @@ MeshCollider:
   m_CookingOptions: 14
   m_SkinWidth: 0.01
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!81 &81168499781424066
-AudioListener:
-  m_ObjectHideFlags: 1
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 100100000}
-  m_GameObject: {fileID: 1296575453402156}
-  m_Enabled: 1
 --- !u!102 &102302958293937256
 TextMesh:
   serializedVersion: 3
@@ -992,6 +984,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   audio: {fileID: 114335410585506892}
+  info: {fileID: 114375059033245494}
   modSel: {fileID: 114137747078870040}
   shardTemplate: {fileID: 1633259556958798}
   statusLight: {fileID: 1739528931956168}
