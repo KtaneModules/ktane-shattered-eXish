@@ -15,8 +15,11 @@ public class ShatteredScript : MonoBehaviour {
     public GameObject statusLight;
     public GameObject fullMirror;
     public GameObject solveText;
+    public Camera mirrorCamera;
     public Light solveLight;
     public Material[] debugMats;
+    public Material mirrorMatTemplate;
+    public RenderTexture mirrorTexTemplate;
 
     VoronoiDiagram voronoi;
     PointD[] shardLabelPositions;
@@ -26,7 +29,7 @@ public class ShatteredScript : MonoBehaviour {
     bool[] hasBeenPlaced;
     bool focused;
 
-    bool debugMode = true; // Debug shard status (green = in frame and not colliding, red = outside frame or colliding)
+    bool debugMode = false; // Debug shard status (green = in frame and not colliding, red = outside frame or colliding)
 
     static int moduleIdCounter = 1;
     int moduleId;
@@ -134,6 +137,13 @@ public class ShatteredScript : MonoBehaviour {
 
             // Rotate shard by random 90 degree angle
             selectable.transform.parent.transform.localEulerAngles += new Vector3(0, 90 * UnityEngine.Random.Range(0, 4), 0);
+
+            // Make individual copy of mirror texture and material for each module
+            RenderTexture textureClone = new RenderTexture(mirrorTexTemplate);
+            mirrorCamera.targetTexture = textureClone;
+            Material mirrorMat = new Material(mirrorMatTemplate);
+            mirrorMat.SetTexture("_MainTex", textureClone);
+            fullMirror.GetComponent<MeshRenderer>().material = mirrorMat;
 
             shards[shardIx] = (selectable.GetComponentInChildren<CollisionDetect>(), selectable, selectable.GetComponent<MeshRenderer>());
             int sIx = shardIx;

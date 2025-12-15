@@ -997,10 +997,13 @@ MonoBehaviour:
   statusLight: {fileID: 1739528931956168}
   fullMirror: {fileID: 1531303432322424}
   solveText: {fileID: 1859751940549222}
+  mirrorCamera: {fileID: 20370004444758312}
   solveLight: {fileID: 108697663368243244}
   debugMats:
   - {fileID: 2100000, guid: e37967b5d2f707a488d25dae2b402dd6, type: 2}
   - {fileID: 2100000, guid: ff0ff3700670a184aa2107a8c781a83e, type: 2}
+  mirrorMatTemplate: {fileID: 2100000, guid: 1868bbab2720303498f984f4b77f3413, type: 2}
+  mirrorTexTemplate: {fileID: 8400000, guid: 25d74f3727e8ca546ab53884b461f6b7, type: 2}
 --- !u!114 &114046364225321184
 MonoBehaviour:
   m_ObjectHideFlags: 1
